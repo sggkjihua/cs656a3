@@ -11,6 +11,15 @@ public class Packet {
     private int router_id;
     private int link_id;
     private int cost;
+
+    public void setSender(int sender) {
+        this.sender = sender;
+    }
+
+    public void setVia(int via) {
+        this.via = via;
+    }
+
     private int sender;
     private int via;
     private static Map<Integer,Integer> circuitDatabase;
@@ -45,7 +54,7 @@ public class Packet {
         return via;
     }
 
-    public Packet(int router_id, int link_id, int cost, int sender, int via, int length) {
+    public Packet( int sender, int router_id, int link_id, int cost,int via, int length) {
         this.router_id = router_id;
         this.link_id = link_id;
         this.cost = cost;
@@ -56,7 +65,7 @@ public class Packet {
 
 
     public static Packet gnenerate_Hello(int router_ID, int link_ID) throws IOException {
-        return new Packet(router_ID, link_ID,-1,-1,-1,2);
+        return new Packet(-1,router_ID, link_ID,-1,-1,2);
     }
 
     public static Packet generate_LSPDU(int sender, int router_id, int link_id, int cost, int via) throws IOException {
@@ -64,7 +73,7 @@ public class Packet {
     }
 
     public static Packet generate_INIT(int router_id) throws IOException {
-        return new Packet(router_id,-1,-1,-1,-1,1);
+        return new Packet(-1,router_id,-1,-1,-1,1);
     }
 
     public static byte[] ToBytes(int[] values, int length) throws IOException
@@ -106,7 +115,7 @@ public class Packet {
         return topology;
     }
 
-    public static Map<Integer,Map<Integer,Integer>> lsPDU_parser(byte[] pdudb, Map<Integer,Map<Integer,Integer>> topology) {
+    public static Packet lsPDU_parser(byte[] pdudb) {
         ByteBuffer buffer = ByteBuffer.wrap(pdudb);
         buffer.order(ByteOrder.LITTLE_ENDIAN);
         int sender = buffer.getInt();
@@ -114,24 +123,14 @@ public class Packet {
         int link_id = buffer.getInt();
         int cost = buffer.getInt();
         int via = buffer.getInt();
-        if(!topology.containsKey(router_id)){
-            topology.put(router_id,new HashMap<>());
-            Router.updated.put(router_id,new HashMap<>());
-        }
-        if(! topology.get(router_id).containsKey(link_id)){
-            Router.updated.get(router_id).put(link_id,cost);
-            topology.get(router_id).put(link_id,cost);
-        }
-        return topology;
+        return new Packet(sender,router_id,link_id,cost,via,5);
     }
 
-    public static Map<Integer,Integer> helloPacket_parser(byte[] hdb,Map<Integer, Integer> neighbors) {
+    public static Packet helloPacket_parser(byte[] hdb) {
         ByteBuffer buffer = ByteBuffer.wrap(hdb);
         buffer.order(ByteOrder.LITTLE_ENDIAN);
         int neighbor_ID = buffer.getInt();
         int link_ID = buffer.getInt();
-        System.out.println("Nrighbour ID is: "+neighbor_ID+" Link ID is: "+link_ID);
-        neighbors.put(neighbor_ID,link_ID);
-        return neighbors;
+        return new Packet(-1,neighbor_ID, link_ID,-1,-1,2);
     }
 }

@@ -29,6 +29,8 @@ public class Router {
     public static Map<Integer,Map<Integer, Integer>> adjcent = new HashMap<>();
     public static Map<Integer,Boolean> excluded = new HashMap<>();
     public static int EXTREMELY_LARGE_NUMBER = 100000000;
+    public static int WAIT_TO_BE_SUB = 666;
+    public static int DELAY = 10000;
 
     public static void main(String args[]) throws IOException {
         // get all the input parameters
@@ -46,8 +48,6 @@ public class Router {
         sendInit();
 
         // create a thread to receive the data, classifying them with the length of the data
-        boom = new Boom();
-        new Timer().schedule(boom,30000);
         receiver = new Receiver();
         Thread receive = new Thread(receiver);
         receive.start();
@@ -81,6 +81,8 @@ public class Router {
             case 44:
                 receiveCircuitDatabase();
                 sendHello();
+                boom = new Boom();
+                new Timer().schedule(boom,DELAY);
                 break;
             case 8:
                 receiveHello();
@@ -97,6 +99,7 @@ public class Router {
         // initialize the topology once receive a circuit database from simulator
         topology = Packet.circuitDB_parser(dp_receive.getData(), router_id);
         dp_receive.setLength(buff_length);
+        initAdjcent();
     }
 
     public static void receiveHello() throws IOException {
@@ -104,10 +107,9 @@ public class Router {
         Packet helloPacket = Packet.helloPacket_parser(dp_receive.getData());
         int neighbour_id = helloPacket.getRouter_id();
         int link_id = helloPacket.getLink_id();
-
+        updateTopology(neighbour_id,link_id, topology.get(router_id).get(link_id));
         // initialize the neighbors map
-        initAdjcent(neighbour_id,link_id);
-
+        updateAdjcent(neighbour_id,link_id);
         // once receive the hello packet, update the neighbours
         updateNeighbours(neighbour_id, link_id);
         //System.out.println("The length of the data in Hello Packet is " +dp_receive.getLength());
@@ -119,10 +121,26 @@ public class Router {
         dp_receive.setLength(buff_length);
     }
 
-    public static void initAdjcent(int neighbor, int link){
-        adjcent.put(link,new HashMap<>());
-        adjcent.get(link).put(neighbor,router_id);
-        adjcent.get(link).put(router_id,neighbor);
+    public static void receiveLSPDU(){
+        /* parse the LSPDU packet and update the cost topology, in the mean time send to unknown neighbour*/
+        Packet LsPduPacket = Packet.lsPDU_parser(dp_receive.getData());
+        //System.out.println("The length of the data received from lsPDU packet is " +dp_receive.getLength());
+        System.out.println("LsPDU: <--- " + LsPduPacket.getSender() +" via "+LsPduPacket.getVia()
+                + " saying router "+LsPduPacket.getRouter_id()+" has link " + LsPduPacket.getLink_id()+" with cost "+LsPduPacket.getCost());
+        updateTopology(LsPduPacket.getRouter_id(), LsPduPacket.getLink_id(), LsPduPacket.getCost());
+        updateAdjcent(LsPduPacket.getRouter_id(),LsPduPacket.getLink_id());
+        OSPF();
+        //System.out.println("Topology updated!");
+        forwardPacket(LsPduPacket);
+        dp_receive.setLength(buff_length);
+    }
+
+    public static void initAdjcent(){
+        Map<Integer,Integer> initLinks = topology.get(router_id);
+        for(Map.Entry<Integer,Integer> entry1:initLinks.entrySet()){
+            int link = entry1.getKey();
+            updateAdjcent(router_id,link);
+        }
     }
 
     public static void updateAdjcent(int router_id, int link_id){
@@ -134,7 +152,7 @@ public class Router {
             return;
         }
         else if(adjcent.get(link_id).isEmpty()){
-           adjcent.get(link_id).put(router_id,null);
+           adjcent.get(link_id).put(router_id,WAIT_TO_BE_SUB);
         }
         else{
             int key = (int)adjcent.get(link_id).keySet().toArray()[0];
@@ -143,18 +161,6 @@ public class Router {
         }
     }
 
-    public static void receiveLSPDU(){
-        /* parse the LSPDU packet and update the cost topology, in the mean time send to unknown neighbour*/
-        Packet LsPduPacket = Packet.lsPDU_parser(dp_receive.getData());
-        //System.out.println("The length of the data received from lsPDU packet is " +dp_receive.getLength());
-        System.out.println("LsPDU: <--- " + LsPduPacket.getSender() +" via "+LsPduPacket.getVia()
-                + " saying router "+LsPduPacket.getRouter_id()+" has link " + LsPduPacket.getLink_id()+" with cost "+LsPduPacket.getCost());
-        updateTopology(LsPduPacket.getRouter_id(), LsPduPacket.getLink_id(), LsPduPacket.getCost());
-        updateAdjcent(LsPduPacket.getRouter_id(),LsPduPacket.getLink_id());
-        //System.out.println("Topology updated!");
-        forwardPacket(LsPduPacket);
-        dp_receive.setLength(buff_length);
-    }
 
 
     public static void parseMap(Map<Integer,Map<Integer,Integer>> map, String message) {
@@ -250,6 +256,7 @@ public class Router {
     public static Map<Integer,Integer> initShortestPath(){
         Map<Integer,Integer> shortestPath = new HashMap<>();
         shortestPath.put(router_id, 0);
+        excluded.clear();
         excluded.put(router_id, true);
 
         for(Map.Entry<Integer,Integer> entry:neighbours.entrySet()){
@@ -267,30 +274,33 @@ public class Router {
     }
 
     public static void OSPF(){
-        Map<Integer,Integer> shorestPath = initShortestPath();
+        Map<Integer,Integer> shortestPath = initShortestPath();
         while (excluded.size()!=topology.size()){
-            int nextNode = findNextNode(shorestPath);
+            int nextNode = findNextNode(shortestPath);
+            //System.out.println("Current node is: "+nextNode+" excludes size is: "+excluded.size()+" Topology size is: "+topology.size());
             Map<Integer,Integer> links = topology.get(nextNode);
             for(Map.Entry<Integer,Integer> entry:links.entrySet()){
                 int link = entry.getKey();
                 int cost = entry.getValue();
                 int router_id = adjcent.get(link).get(nextNode);
-                shorestPath.put(router_id,Math.min(shorestPath.get(nextNode)+cost,shorestPath.get(router_id)));
+                if((Integer)router_id != WAIT_TO_BE_SUB){
+                    shortestPath.put(router_id,Math.min(shortestPath.get(nextNode)+cost,shortestPath.get(router_id)));
+                }
             }
         }
-        showShortest(shorestPath);
+        showShortest(shortestPath);
     }
 
-    public static int findNextNode(Map<Integer,Integer> shorestPath){
-        int minimumCost = 100000;
+    public static int findNextNode(Map<Integer,Integer> shortestPath){
+        int minimumCost = EXTREMELY_LARGE_NUMBER+1;
         int nextNode = router_id;
-        for(Map.Entry<Integer,Integer> entry:shorestPath.entrySet()){
-            int router_id = entry.getKey();
+        for(Map.Entry<Integer,Integer> entry:shortestPath.entrySet()){
+            int router_ID = entry.getKey();
             int cost = entry.getValue();
-            if(!excluded.containsKey(router_id)){
+            if(!excluded.containsKey(router_ID)){
                 if(cost < minimumCost){
                     minimumCost = cost;
-                    nextNode = router_id;
+                    nextNode = router_ID;
                 }
             }
         }

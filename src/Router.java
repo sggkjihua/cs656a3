@@ -32,7 +32,6 @@ public class Router {
     public static int WAIT_TO_BE_SUB = 666;
     public static int DELAY = 10000;
     public static String fileName ;
-    public static String LogContent;
     public static String MSG;
 
     public static void main(String args[]) throws IOException {
@@ -47,7 +46,7 @@ public class Router {
         buf = new byte[buff_length];
         dp_receive = new DatagramPacket(buf, buf.length);
 
-        LogContent = String.format("Router %s \n",router_id);
+        //LogContent = String.format("Router %s \n",router_id);
         fileName = String.format("Router(%1$s).log",router_id);
         // send init packet to emulator
         sendInit();
@@ -62,10 +61,8 @@ public class Router {
         /* send INIT packet to simulator */
         Packet initPacket = Packet.generate_INIT(router_id);
         sendPacket(initPacket);
-        MSG = "Initialized packet sent: router ID "+ router_id+ " waiting for circuit database...\n";
+        MSG = "Initialized packet sent: router ID "+ router_id+ " waiting for circuit database...";
         writeLog(MSG);
-        LogContent += MSG;
-        System.out.print(MSG);
     }
 
     public static void sendHello() throws IOException {
@@ -74,10 +71,8 @@ public class Router {
         for (Map.Entry<Integer,Integer> entry : myLinks.entrySet()) {
             Packet helloPacket = Packet.gnenerate_Hello(router_id, entry.getKey());
             sendPacket(helloPacket);
-            MSG = "Hello packet: ---> RouterID: " + router_id + " and LinkID: " + entry.getKey()+"\n";
-            LogContent += MSG;
+            MSG = "Hello packet: ---> RouterID: " + router_id + " LinkID: " + entry.getKey();
             writeLog(MSG);
-            System.out.print(MSG);
         }
     }
 
@@ -121,18 +116,11 @@ public class Router {
         // once receive the hello packet, update the neighbours
         updateNeighbours(neighbour_id, link_id);
         //System.out.println("The length of the data in Hello Packet is " +dp_receive.getLength());
-        MSG = "Neighbour ID is: "+neighbour_id+" Link ID is: "+link_id +"\n";
-        System.out.print(MSG);
+        MSG = "\nHello packet: <--- from Neighbour "+neighbour_id+" via Link "+link_id;
         writeLog(MSG);
-        LogContent += MSG;
 
         // in the meantime, send the current topology to the recently joined neighbour
         sendTopologyToNeighbour(neighbour_id, link_id);
-
-        MSG = "Current topology successfully sent to : "+neighbour_id+" via "+link_id+"\n";
-        System.out.print(MSG);
-        writeLog(MSG);
-        LogContent += MSG;
         dp_receive.setLength(buff_length);
     }
 
@@ -141,10 +129,9 @@ public class Router {
         Packet LsPduPacket = Packet.lsPDU_parser(dp_receive.getData());
         //System.out.println("The length of the data received from lsPDU packet is " +dp_receive.getLength());
         MSG = "LsPDU: <--- " + LsPduPacket.getSender() +" via "+LsPduPacket.getVia()
-                + " saying router "+LsPduPacket.getRouter_id()+" has link " + LsPduPacket.getLink_id()+" with cost "+LsPduPacket.getCost()+"\n";
-        System.out.print(MSG);
+                + " saying router "+LsPduPacket.getRouter_id()+" has link " + LsPduPacket.getLink_id()+" with cost "+LsPduPacket.getCost();
         writeLog(MSG);
-        LogContent += MSG;
+
 
         updateTopology(LsPduPacket.getRouter_id(), LsPduPacket.getLink_id(), LsPduPacket.getCost());
         updateAdjcent(LsPduPacket.getRouter_id(),LsPduPacket.getLink_id());
@@ -181,28 +168,6 @@ public class Router {
     }
 
 
-
-    public static void parseMap(Map<Integer,Map<Integer,Integer>> map, String message) {
-        for (Map.Entry<Integer, Map<Integer,Integer>> entry : map.entrySet()) {
-            int router = entry.getKey();
-            System.out.println(message+ router);
-            LogContent += message+router+"\n";
-            writeLog(message+router+"\n");
-            Map<Integer, Integer> costs = entry.getValue();
-            for (Map.Entry<Integer,Integer> entry2 : costs.entrySet()) {
-                MSG = entry2.getKey()+"  " +entry2.getValue()+"|";
-                LogContent += MSG;
-                System.out.print(MSG);
-                writeLog(MSG);
-            }
-            System.out.println(" ");
-            LogContent +="\n";
-            writeLog("\n");
-            System.out.println("------------------------");
-            writeLog("=====================");
-            LogContent += "======================\n";
-        }
-    }
     public static void updateNeighbours(int neighbour_id, int link_id){
         /* put the newly found neighbour to the map*/
         neighbours.put(neighbour_id,link_id);
@@ -220,15 +185,14 @@ public class Router {
                 if (!alreadySent(neighbour_id, link, router_id)) {
                     Packet LsPduPacket = Packet.generate_LSPDU(router_id, router, link, cost, via);
                     sendPacket(LsPduPacket);
-                    MSG = "Current topology: ---> " + neighbour_id + " via " + via
-                            + " saying router " + router + " has link " + link + " with cost " + cost+"\n";
-                    System.out.print(MSG);
+                    MSG = "Current Topology: ---> " + neighbour_id + " via " + via
+                            + " Router " + router + " has Link " + link + " with Cost " + cost;
                     writeLog(MSG);
-                    LogContent += MSG;
-
                 }
             }
         }
+        MSG = "Current Topology successfully sent to : "+neighbour_id+" via "+via+"\n";
+        writeLog(MSG);
     }
 
     public static void sendPacket(Packet packetToSend){
@@ -275,15 +239,11 @@ public class Router {
                     LsPduPacket.setVia(link);
                     sendPacket(LsPduPacket);
                     MSG = "LsPDU: ---> from " + originalSender + " forwarded to " + neighbor + " via " + link
-                            + " saying " + LsPduPacket.getRouter_id() + " has link " + LsPduPacket.getLink_id() + " with cost " + LsPduPacket.getCost()+"\n";
-                    System.out.print(MSG);
+                            + " saying Router " + LsPduPacket.getRouter_id() + " has Link " + LsPduPacket.getLink_id() + " with Cost " + LsPduPacket.getCost();
                     writeLog(MSG);
-                    LogContent += MSG;
                 }else{
-                    MSG = "(NOT FORWARDED) "+neighbor+" has already known "+LsPduPacket.getRouter_id()+" has link "+LsPduPacket.getLink_id()+"\n";
-                    System.out.print(MSG);
+                    MSG = "(NOT FORWARDED) Neighbor "+neighbor+" has already known "+LsPduPacket.getRouter_id()+" has link "+LsPduPacket.getLink_id();
                     writeLog(MSG);
-                    LogContent+=MSG;
                 }
             }
         }
@@ -350,10 +310,8 @@ public class Router {
         for (Map.Entry<Integer,Integer> entry : map.entrySet()) {
             int dest = entry.getKey();
             int cost = entry.getValue();
-            MSG = "Cost to "+dest+" is "+cost +"\n";
-            System.out.print(MSG);
+            MSG = "Cost to "+dest+" is "+cost ;
             writeLog(MSG);
-            LogContent += MSG;
         }
     }
 
@@ -361,13 +319,7 @@ public class Router {
         @Override
         public void run() {
             parseMap(topology,"Topology of ");
-            LogContent += "+++++++++++++++\n";
-            writeLog("++++++++++++++\n");
-            System.out.println("+++++++++++++++++");
             parseMap(adjcent,"Adjcent pair of link ");
-            LogContent += "+++++++++++++++\n";
-            writeLog("+++++++++++++++\n");
-            System.out.println("+++++++++++++++++");
             OSPF();
             //writeLog(LogContent);
             System.exit(0);
@@ -386,12 +338,28 @@ public class Router {
         }
     }
 
+
+    public static void parseMap(Map<Integer,Map<Integer,Integer>> map, String message) {
+        MSG = "";
+        for (Map.Entry<Integer, Map<Integer,Integer>> entry : map.entrySet()) {
+            int router = entry.getKey();
+            MSG += message+router+"\n";
+            Map<Integer, Integer> costs = entry.getValue();
+            for (Map.Entry<Integer,Integer> entry2 : costs.entrySet()) {
+                MSG += entry2.getKey()+"  " +entry2.getValue()+"|";
+            }
+            MSG +="\n=====================\n";
+        }
+        writeLog(MSG);
+    }
+
     public static void writeLog(String MSG) {
         try(FileWriter fw = new FileWriter(fileName,true);
             BufferedWriter bw = new BufferedWriter(fw);
             PrintWriter out = new PrintWriter(bw))
         {
             out.println(MSG);
+            System.out.println(MSG);
         } catch (IOException e) {
             //exception handling left as an exercise for the reader
         }
@@ -399,5 +367,134 @@ public class Router {
 }
 
 
+
+class Packet {
+    static private int length;
+    private int router_id;
+    private int link_id;
+    private int cost;
+
+    public void setSender(int sender) {
+        this.sender = sender;
+    }
+
+    public void setVia(int via) {
+        this.via = via;
+    }
+
+    private int sender;
+    private int via;
+    private static Map<Integer,Integer> circuitDatabase;
+
+    public static Boolean isTopology_updated() {
+        return topology_updated;
+    }
+
+    private static Boolean topology_updated = false;
+
+    public int getLength() {
+        return length;
+    }
+
+    public int getRouter_id() {
+        return router_id;
+    }
+
+    public int getLink_id() {
+        return link_id;
+    }
+
+    public int getCost() {
+        return cost;
+    }
+
+    public int getSender() {
+        return sender;
+    }
+
+    public int getVia() {
+        return via;
+    }
+
+    public Packet( int sender, int router_id, int link_id, int cost,int via, int length) {
+        this.router_id = router_id;
+        this.link_id = link_id;
+        this.cost = cost;
+        this.sender = sender;
+        this.via = via;
+        this.length = length;
+    }
+
+
+    public static Packet gnenerate_Hello(int router_ID, int link_ID) throws IOException {
+        return new Packet(-1,router_ID, link_ID,-1,-1,2);
+    }
+
+    public static Packet generate_LSPDU(int sender, int router_id, int link_id, int cost, int via) throws IOException {
+        return new Packet(sender, router_id, link_id, cost, via, 5);
+    }
+
+    public static Packet generate_INIT(int router_id) throws IOException {
+        return new Packet(-1,router_id,-1,-1,-1,1);
+    }
+
+    public static byte[] ToBytes(int[] values, int length) throws IOException
+        /*transform the int array into bytes*/ {
+        ByteBuffer buffer = ByteBuffer.allocate(4 * length);
+        buffer.order(ByteOrder.LITTLE_ENDIAN);
+        for (int i = 0; i < values.length; i++) {
+            buffer.putInt(values[i]);
+        }
+        return buffer.array();
+    }
+    public static byte[] getUdpData(Packet packet)throws IOException{
+        int length = packet.getLength();
+        switch (length){
+            case 1:
+                return ToBytes(new int[]{packet.getRouter_id()},length);
+            case 2:
+                return ToBytes(new int[]{packet.getRouter_id(),packet.getLink_id()},length);
+            case 5:
+                return ToBytes(new int[]{packet.getSender(),packet.getRouter_id(),packet.getLink_id(),
+                        packet.getCost(),packet.getVia()},length);
+        }
+        return ToBytes(new int[]{},0);
+    }
+
+
+    public static Map<Integer,Map<Integer,Integer>> circuitDB_parser(byte[] cdb, int router_id) {
+        // initialize the topology put only its own information
+        Map<Integer, Map<Integer,Integer>> topology = new HashMap<>();
+        ByteBuffer buffer = ByteBuffer.wrap(cdb);
+        buffer.order(ByteOrder.LITTLE_ENDIAN);
+        topology.put(router_id,new HashMap<>());
+        int nbrLink = buffer.getInt();
+        for (int i = 1; i < nbrLink + 1; i++) {
+            int l = buffer.getInt();
+            int c = buffer.getInt();
+            topology.get(router_id).put(l,c);
+        }
+        return topology;
+    }
+
+    public static Packet lsPDU_parser(byte[] pdudb) {
+        ByteBuffer buffer = ByteBuffer.wrap(pdudb);
+        buffer.order(ByteOrder.LITTLE_ENDIAN);
+        int sender = buffer.getInt();
+        int router_id = buffer.getInt();
+        int link_id = buffer.getInt();
+        int cost = buffer.getInt();
+        int via = buffer.getInt();
+        return new Packet(sender,router_id,link_id,cost,via,5);
+    }
+
+    public static Packet helloPacket_parser(byte[] hdb) {
+        ByteBuffer buffer = ByteBuffer.wrap(hdb);
+        buffer.order(ByteOrder.LITTLE_ENDIAN);
+        int neighbor_ID = buffer.getInt();
+        int link_ID = buffer.getInt();
+        return new Packet(-1,neighbor_ID, link_ID,-1,-1,2);
+    }
+}
 
 

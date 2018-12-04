@@ -261,9 +261,9 @@ public class Router {
     }
 
 
-    public static Map<Integer,Integer> initShortestPath(){
-        Map<Integer,Integer> shortestPath = new HashMap<>();
-        shortestPath.put(router_id, 0);
+    public static Map<Integer,Pair<Integer, String>> initShortestPath(){
+        Map<Integer,Pair<Integer, String>> shortestPath = new HashMap<>();
+        shortestPath.put(router_id, new Pair<>(0,"local"));
         excluded.clear();
         excluded.put(router_id, true);
 
@@ -271,18 +271,18 @@ public class Router {
             int neighbor = entry.getKey();
             int link = entry.getValue();
             int cost = topology.get(router_id).get(link);
-            shortestPath.put(neighbor,cost);
+            shortestPath.put(neighbor,new Pair<>(cost,Integer.toString(neighbor)));
         }
         for(Map.Entry<Integer,Map<Integer,Integer>>entry2:topology.entrySet()){
             if(!shortestPath.containsKey(entry2.getKey())){
-                shortestPath.put(entry2.getKey(),EXTREMELY_LARGE_NUMBER);
+                shortestPath.put(entry2.getKey(),new Pair<>(EXTREMELY_LARGE_NUMBER, "Unreachable"));
             }
         }
         return shortestPath;
     }
 
     public static void OSPF(){
-        Map<Integer,Integer> shortestPath = initShortestPath();
+        Map<Integer,Pair<Integer,String>> shortestPath = initShortestPath();
         while (excluded.size()!=topology.size()){
             int nextNode = findNextNode(shortestPath);
             //System.out.println("Current node is: "+nextNode+" excludes size is: "+excluded.size()+" Topology size is: "+topology.size());
@@ -292,19 +292,25 @@ public class Router {
                 int cost = entry.getValue();
                 int router_id = adjcent.get(link).get(nextNode);
                 if((Integer)router_id != WAIT_TO_BE_SUB){
-                    shortestPath.put(router_id,Math.min(shortestPath.get(nextNode)+cost,shortestPath.get(router_id)));
+                    int current_cost = shortestPath.get(router_id).getKey();
+                    int through_cost = shortestPath.get(nextNode).getKey() + cost;
+                    if (through_cost<current_cost){
+                        shortestPath.put(router_id, new Pair<>(through_cost,shortestPath.get(nextNode).getValue()+"->"+Integer.toString(router_id)));
+                    }
                 }
             }
         }
         showShortest(shortestPath);
     }
 
-    public static int findNextNode(Map<Integer,Integer> shortestPath){
+    public static int findNextNode(Map<Integer,Pair<Integer,String>> shortestPath){
         int minimumCost = EXTREMELY_LARGE_NUMBER+1;
         int nextNode = router_id;
-        for(Map.Entry<Integer,Integer> entry:shortestPath.entrySet()){
+        for(Map.Entry<Integer,Pair<Integer,String>> entry:shortestPath.entrySet()){
             int router_ID = entry.getKey();
-            int cost = entry.getValue();
+            Pair<Integer,String> cost_path = entry.getValue();
+            int cost = cost_path.getKey();
+            String path = cost_path.getValue();
             if(!excluded.containsKey(router_ID)){
                 if(cost < minimumCost){
                     minimumCost = cost;
@@ -317,12 +323,12 @@ public class Router {
     }
 
 
-    public static void showShortest(Map<Integer,Integer> map) {
+    public static void showShortest(Map<Integer,Pair<Integer,String>> rib) {
         MSG = "Current RIB of Router "+router_id+"\n";
-        for (Map.Entry<Integer,Integer> entry : map.entrySet()) {
+        for (Map.Entry<Integer,Pair<Integer,String>> entry : rib.entrySet()) {
             int dest = entry.getKey();
-            int cost = entry.getValue();
-            MSG += "Cost to "+dest+" is "+cost+"\n" ;
+            Pair cost_path = entry.getValue();
+            MSG += "Dest: "+dest+ " Cost: "+cost_path.getKey()+" Path: "+cost_path.getValue()+"\n" ;
         }
         writeLog(MSG);
 
@@ -332,7 +338,7 @@ public class Router {
         @Override
         public void run() {
             parseMap(topology,"Topology of ");
-            parseMap(adjcent,"Adjcent pair of link ");
+            parseMap(adjcent,"Adjacent pair of link ");
             OSPF();
             //writeLog(LogContent);
             System.exit(0);
